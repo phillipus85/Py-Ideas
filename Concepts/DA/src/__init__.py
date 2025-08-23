@@ -21,4 +21,3 @@ assert BASIC_DIGIT_POW_RE
 assert FDU
 assert EXP_PATTERN_STR
 assert FDU_PATTERN_STR
-
