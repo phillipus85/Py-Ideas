@@ -21,6 +21,36 @@ from typing import Any, Dict, Optional
 import math
 
 
+# @dataclass
+# class QueueModel(ABC):
+#     pass
+
+
+# @dataclass
+# class MM1(QueueModel):
+#     """M/M/1 queue model"""
+#     pass
+
+
+# @dataclass
+# class MM1K(QueueModel):
+#     """M/M/1/K queue model"""
+#     pass
+
+
+# @dataclass
+# class MM1L(QueueModel):
+#     """M/M/1/L queue model"""
+#     pass
+
+# @dataclass
+# class MM1K(QueueModel):
+#     """M/M/1/K queue model"""
+#     pass
+
+
+
+
 @dataclass
 class BaseQueueModel(ABC):
     """Abstract base class for queueing theory models"""

@@ -1,7 +1,7 @@
 ﻿import numpy as np
 import pandas as pd
 import os
-from queues import MM1, MMC, MM1L, MMCL
+from Concepts.queues.queuesA import MM1, MMC, MM1L, MMCL
 import random
 import simpy
 
