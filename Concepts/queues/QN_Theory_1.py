@@ -26,9 +26,9 @@ def load_queue_data(service_file, routing_file):
 # -----------------------------
 def solve_jackson_network(mu, lambda0, P):
     """Solve open Jackson network using traffic equations"""
-    I = np.eye(len(mu))
+    Is = np.eye(len(mu))
     # print(I)
-    lambdas = np.linalg.solve(I - P.T, lambda0)
+    lambdas = np.linalg.solve(Is - P.T, lambda0)
 
     rho = lambdas / mu  # utilization
     print(rho)
@@ -65,9 +65,12 @@ class QueueNode:
         self.sim_time = sim_time
         self.server = simpy.Resource(env, capacity=1)
         self.wait_times = []
+        self.queue_times = []  # Track time spent waiting in queue only
+        self.service_times = []  # Track service times
 
     def service(self, job):
         service_time = random.expovariate(self.mu)
+        self.service_times.append(service_time)
         yield self.env.timeout(service_time)
         self.wait_times.append(service_time)
 
@@ -84,11 +87,21 @@ def job(env, node_id, nodes, P, results, sim_time):
     current = node_id
     while True:
         node = nodes[current]
+        arrival_time = env.now
+
         with node.server.request() as req:
-            start = env.now
+            # Start measuring queue time
+            queue_start = env.now
             yield req
+            # Calculate time spent in queue only
+            queue_time = env.now - queue_start
+            node.queue_times.append(queue_time)
+
+            # Start measuring service time
+            # service_start = env.now
             yield env.process(node.service("job"))
-            wait = env.now - start
+            # Total time in system
+            wait = env.now - arrival_time
             results[current].append(wait)
 
         # routing decision
@@ -117,12 +130,34 @@ def simulate_network(mu, lambda0, P, sim_time=5000):
     env.run(until=sim_time)
 
     # summarize
-    avg_wait = [np.mean(r) if len(r) > 0 else 0 for r in results]
-    return pd.DataFrame({
-        "Node": range(len(mu)),
-        "Avg_Wait_Sim": avg_wait,
-        "Jobs_Served": [len(r) for r in results]
-    })
+    metrics = []
+    for i, node in enumerate(nodes):
+        # Calculate metrics
+        W_sim = np.mean(results[i]) if results[i] else 0
+        Wq_sim = np.mean(node.queue_times) if node.queue_times else 0
+        jobs_served = len(results[i])
+        lambda_sim = jobs_served / sim_time
+
+        # Calculate rho using average service time
+        avg_service_time = np.mean(node.service_times) if node.service_times else 0
+        rho_sim = lambda_sim * avg_service_time if lambda_sim > 0 else 0
+
+        # Little's Law: L = λW, Lq = λWq
+        L_sim = lambda_sim * W_sim
+        Lq_sim = lambda_sim * Wq_sim
+
+        metrics.append({
+            "Node": i,
+            "W_Sim": W_sim,
+            "Wq_Sim": Wq_sim,
+            "L_Sim": L_sim,
+            "Lq_Sim": Lq_sim,
+            "rho_Sim": rho_sim,
+            "lambda_Sim": lambda_sim,
+            "Jobs_Served": jobs_served
+        })
+
+    return pd.DataFrame(metrics)
 
 
 # -----------------------------
@@ -141,7 +176,7 @@ if __name__ == "__main__":
 
     # Compare both
     merged = analytical.copy()
-    merged["Avg_Wait_Sim"] = simulation["Avg_Wait_Sim"]
+    merged["W_Sim"] = simulation["W_Sim"]
     merged["Jobs_Served"] = simulation["Jobs_Served"]
     print("\n--- Comparison ---")
     print(merged)
