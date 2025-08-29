@@ -46,6 +46,7 @@ def load(fname: str) -> pd.DataFrame:
 # -----------------------------
 # Analytical Solver (Jackson)
 # -----------------------------
+
 def solve_jackson_network(miu, lambda0, n_servers, kap, P):
     """Solve open Jackson network using traffic equations"""
     Is = np.eye(len(miu))
@@ -57,6 +58,7 @@ def solve_jackson_network(miu, lambda0, n_servers, kap, P):
     # AKI voy!!! hacerlo generico para los modelos MM1, MMC, MM1K y MMCK
     # rho = lambdas / miu  # utilization
     rho = []
+    # miu = []
     L = []
     Lq = []
     W = []
@@ -66,6 +68,7 @@ def solve_jackson_network(miu, lambda0, n_servers, kap, P):
         q = Queue(la, m, n, k)
         q.calculate_metrics()
         rho.append(q.rho)
+        # miu.append(q.miu)
         L.append(q.avg_len)
         Lq.append(q.avg_len_q)
         W.append(q.avg_wait)
@@ -78,7 +81,13 @@ def solve_jackson_network(miu, lambda0, n_servers, kap, P):
         print("⚠️ Warning: System unstable (ρ >= 1 at some node).")
 
     # Calculate network-wide metrics
-    network_metrics = calculate_network_metrics(lambdas, L, Lq, W, Wq, rho)
+    network_metrics = calculate_network_metrics(lambdas,
+                                                L,
+                                                Lq,
+                                                W,
+                                                Wq,
+                                                rho,
+                                                miu)
 
     # Return individual node metrics
     return pd.DataFrame({
@@ -92,7 +101,7 @@ def solve_jackson_network(miu, lambda0, n_servers, kap, P):
     }), network_metrics
 
 
-def calculate_network_metrics(lambdas, L, Lq, W, Wq, rho=None):
+def calculate_network_metrics(lambdas, L, Lq, W, Wq, rho=None, miu=None):
     """Calculate network-wide performance metrics.
 
     For a Jackson network, we calculate:
@@ -109,6 +118,8 @@ def calculate_network_metrics(lambdas, L, Lq, W, Wq, rho=None):
         Node-specific performance metrics
     rho : array-like, optional
         Utilization at each node
+    miu : array-like, optional
+        Service rates for fallback calculations
 
     Returns:
     --------
@@ -135,12 +146,16 @@ def calculate_network_metrics(lambdas, L, Lq, W, Wq, rho=None):
     # Average utilization (arithmetic mean of node utilizations)
     avg_rho = np.mean(rho) if rho is not None and len(rho) > 0 else 0
 
+    # Average service rate (arithmetic mean of node service rates)
+    avg_miu = np.mean(miu) if miu is not None and len(miu) > 0 else 0
+
     return {
+        "avg_miu": avg_miu,
+        "avg_rho": avg_rho,
         "L_net": L_network,
         "Lq_net": Lq_network,
         "W_net": W_network,
         "Wq_net": Wq_network,
-        "avg_rho": avg_rho,
         "total_throughput": total_lambda
     }
 
@@ -365,8 +380,14 @@ def simulate_network(miu, lambda0, P, s=None, K=None, sim_time=5000):
         # Calculate lambda (arrival rate) and rho (utilization)
         lambda_sim = jobs_served / sim_time
 
+        # Calculate actual average service rate from the service times
+        avg_service_time = np.mean(node.service_times) if node.service_times else 1 / miu[i]
+
+        # Calculated average service rate
+        service_rate_sim = 1 / avg_service_time if avg_service_time > 0 else miu[i]
+
         # For multi-server queues, utilization is per server
-        rho_sim = min(1.0, lambda_sim / (node.s * miu[i]))
+        rho_sim = min(1.0, lambda_sim / (node.s * service_rate_sim))
 
         # Validate with Little's Law
         L_from_littles = lambda_sim * W_sim
@@ -379,6 +400,7 @@ def simulate_network(miu, lambda0, P, s=None, K=None, sim_time=5000):
             "Node": i,
             "Model": model_type,
             "lambda_sim": lambda_sim,
+            "miu_sim": service_rate_sim,
             "rho_sim": rho_sim,
             "L_sim": L_sim,
             "Lq_sim": Lq_sim,
@@ -388,7 +410,7 @@ def simulate_network(miu, lambda0, P, s=None, K=None, sim_time=5000):
             "Lq_littles": Lq_from_littles,
             "Jobs_Served": jobs_served,
             "Jobs_Blocked": node.blocked_jobs,
-            "Blocking_Prob": blocking_prob
+            "Blocking_Prob": blocking_prob,
         })
 
     # Calculate network-wide metrics
@@ -397,11 +419,15 @@ def simulate_network(miu, lambda0, P, s=None, K=None, sim_time=5000):
     Lq_sims = [metrics["Lq_sim"] for metrics in sim_metrics]
     W_sims = [metrics["W_sim"] for metrics in sim_metrics]
     Wq_sims = [metrics["Wq_sim"] for metrics in sim_metrics]
-
-    network_metrics = calculate_network_metrics(
-        lambda_sims, L_sims, Lq_sims, W_sims, Wq_sims,
-        [metrics["rho_sim"] for metrics in sim_metrics]
-    )
+    rhos = [metrics["rho_sim"] for metrics in sim_metrics]
+    mius = [metrics["miu_sim"] for metrics in sim_metrics]
+    network_metrics = calculate_network_metrics(lambda_sims,
+                                                L_sims,
+                                                Lq_sims,
+                                                W_sims,
+                                                Wq_sims,
+                                                rhos,
+                                                mius)
 
     return pd.DataFrame(sim_metrics), network_metrics
 
@@ -447,12 +473,14 @@ if __name__ == "__main__":
 
     # Run simulation
     print("\n--- SimPy Simulation ---")
-    sim_nd_metrics, simulation_network_metrics = simulate_network(
+    sim_nd_metrics, sim_net_metrics = simulate_network(
         miu, lambda0, P, s=n_servers, K=kap, sim_time=50000)
-    print(sim_nd_metrics)
+    # Set pandas display options to show all columns with proper formatting
+    with pd.option_context('display.max_columns', None, 'display.width', None, 'display.expand_frame_repr', True, 'display.precision', 4):
+        print(sim_nd_metrics)
 
     print("\n--- Simulation Network-wide Metrics ---")
-    for key, value in simulation_network_metrics.items():
+    for key, value in sim_net_metrics.items():
         print(f"{key}: {fmt(value)}")
 
     # Compare both
@@ -464,6 +492,7 @@ if __name__ == "__main__":
 
     # Add analytical metrics
     comparison["lambda_theo"] = analyt_nd_metrics["lambda"].values
+    comparison["miu_theo"] = analyt_nd_metrics["miu"].values
     comparison["rho_theo"] = analyt_nd_metrics["rho"].values
     comparison["L_theo"] = analyt_nd_metrics["L"].values
     comparison["Lq_theo"] = analyt_nd_metrics["Lq"].values
@@ -472,6 +501,7 @@ if __name__ == "__main__":
 
     # Add simulation metrics
     comparison["lambda_sim"] = sim_nd_metrics["lambda_sim"]
+    comparison["miu_sim"] = sim_nd_metrics["miu_sim"]
     comparison["rho_sim"] = sim_nd_metrics["rho_sim"]
     comparison["L_sim"] = sim_nd_metrics["L_sim"]
     comparison["Lq_sim"] = sim_nd_metrics["Lq_sim"]
@@ -492,7 +522,7 @@ if __name__ == "__main__":
     error_df = pd.DataFrame()
     error_df["Node"] = comparison["Node"]
 
-    for metric in ["lambda", "rho", "L", "Lq", "W", "Wq"]:
+    for metric in ["lambda", "miu", "rho", "L", "Lq", "W", "Wq"]:
         error_df[f"{metric}_err"] = 100 * abs(comparison[f"{metric}_theo"] - comparison[f"{metric}_sim"]) / comparison[f"{metric}_theo"]
 
     # Add Little's Law validation errors
@@ -505,10 +535,10 @@ if __name__ == "__main__":
     print("\n--- Network-wide Metrics Comparison ---")
     network_comparison = pd.DataFrame(columns=["Metric", "Theoretical", "Simulation", "Error %"])
 
-    for key in ["L_net", "Lq_net", "W_net", "Wq_net", "avg_rho", "total_throughput"]:
-        if key in analyt_net_metrics and key in simulation_network_metrics:
+    for key in ["avg_miu", "avg_rho", "L_net", "Lq_net", "W_net", "Wq_net", "total_throughput"]:
+        if key in analyt_net_metrics and key in sim_net_metrics:
             analytical_value = analyt_net_metrics[key]
-            simulation_value = simulation_network_metrics[key]
+            simulation_value = sim_net_metrics[key]
             error = 100 * abs(analytical_value - simulation_value) / analytical_value if analytical_value != 0 else 0
 
             network_comparison.loc[len(network_comparison)] = [
