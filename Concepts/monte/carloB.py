@@ -50,13 +50,15 @@ if __name__ == "__main__":
     for _ in range(10000):  # number of random systems
         # Random parameters
         # service rate per server
-        mu = 2.0
+        mu = 10.0
         # number of servers, at least 1, at most 8
-        c = np.random.randint(1, 10)
+        c = np.random.randint(1, 8)
         # system capacity, at least c, at most c+20
         K = np.random.randint(c + 1, c + 10)
         # arrival rate, between 0.1 and 1.5*c*mu
-        lmbda = np.random.uniform(0.1, 1.5 * c * 1.0)
+        # lmbda = np.random.uniform(0.1, 1.5 * c * 1.0)
+        lmbda = np.random.exponential(scale=2.0) * c * mu
+        # print(lmbda, mu, c, K)
 
         chi, L, W = mmck_metrics(lmbda, mu, c, K)
         if np.isfinite(W) and chi > 1e-12:
