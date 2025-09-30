@@ -176,7 +176,7 @@ if __name__ == "__main__":
 
     # Example 2: Mixed with dependent variables
     print("Example 2: Mixed named and lambda functions (dependent variables)")
-    
+
     sim_mixed_dep = DependentMonteCarloSimulation(
         iterations=1000,
         model_function=lambda x, y: x * y + 2,  # Using lambda
@@ -233,7 +233,7 @@ if __name__ == "__main__":
 
     sim_financial_mixed.run()
     print("Portfolio results:", sim_financial_mixed.summary())
-    
+
     # Show statistics for key variables
     print("\nAsset class statistics:")
     for var_name in ["market_return", "risk_free_rate", "stock_return", "bond_return"]:
