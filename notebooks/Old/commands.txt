@@ -1,0 +1,133 @@
+﻿========================= documentation =========================
+
+https://reintech.io/blog/generating-multi-language-documentation-with-sphinx
+
+https://www.codingwiththomas.com/blog/my-sphinx-best-practice-for-a-multiversion-documentation-in-different-languages
+
+https://www.youtube.com/watch?v=Nz8zutA55fI
+
+https://youtu.be/5KEObONUkik
+
+========================= sphinx commands =========================
+
+TODO need to install the following packages for documentation:
+
+    sphinx-quickstart
+
+    make html
+
+    make gettext
+
+    sphinx-build -b gettext . _build/gettext
+
+    sphinx-intl update -p _build/gettext -l es
+
+    sphinx-build -b html -D language='es' . _build/html/es
+
+
+========================= DIST file =========================
+
+python setup.py sdist 
+
+python setup.py bdist_wheel sdist
+
+python setup.py bdist_wheel
+
+pip install -e .
+
+
+============= Virtual Enviroments ============
+
+python -m venv venv
+
+.\venv\Scripts\activate
+
+deactivate
+
+pip freeze > requirements.txt
+pip install -r requirements.txt
+python .\main.py
+
+
+============ Coverage =================
+
+
+commands:
+    pytest --cov=pydasa --cov-report=html tests/
+
+-- for the pyproject.toml file ---
+
+# [tool.coverage.run]
+# source = ["pydasa"]
+# omit = [
+#     "*/tests/*",
+#     "*/test_*.py",
+#     "main.py",
+#     "setup.py"
+# ]
+
+# [tool.coverage.report]
+# exclude_lines = [
+#     "pragma: no cover",
+#     "def __repr__",
+#     "if __name__ == .__main__.:",
+# ]
+
+========================= DEVELOPMENT WORKFLOW =========================
+
+# Install in editable mode (for development/testing)
+pip install -e .
+
+# Run tests with coverage
+pytest --cov=pydasa --cov-report=html tests/
+
+# Clean coverage cache
+del .coverage
+rmdir /s /q htmlcov
+
+
+========================= DISTRIBUTION (Release Only) =========================
+
+# Only build distribution when ready to release
+python -m build
+
+# Or the old way
+python setup.py bdist_wheel sdist
+
+# Install from built wheel (for testing the distribution)
+pip install dist/pydasa-0.1.0-py3-none-any.whl
+
+
+========================= Virtual Environments ============
+
+python -m venv venv
+.\venv\Scripts\activate
+deactivate
+
+# Install dependencies + package in editable mode
+pip install -e .
+pip install -e ".[dev]"  # if you have dev dependencies
+
+pip freeze > requirements.txt
+pip install -r requirements.txt
+
+
+========================= DISTRIBUTION (Release Only) =========================
+
+# 1. Clean old builds
+Remove-Item -Recurse -Force dist, build, src\pydasa.egg-info
+
+# 2. Build package
+python -m build
+
+# 3. Test on TestPyPI (optional but recommended)
+python -m twine upload --repository testpypi dist/*
+
+# 4. Upload to PyPI
+python -m twine upload dist/*
+
+# 5. Install from PyPI
+pip install pydasa
+
+# 6. Verify installation
+python -c "import pydasa; print(pydasa.__version__)"
