@@ -1,0 +1,9 @@
+﻿repos:
+  - repo: local
+    hooks:
+      - id: expand-markdown-snippets
+        name: Expand Markdown snippets
+        entry: python scripts/expand_snippets.py
+        language: system
+        files: ^protocol/process\.md$
+        pass_filenames: true
